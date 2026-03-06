@@ -19,7 +19,8 @@ app.post('/webhook', async (req, res) => {
     else if (sessions[senderId].step === 1) {
         sessions[senderId].name = text;
         sessions[senderId].step = 2;
-        sendFB(senderId, "ধন্যবাদ। আপনার ফোন নম্বর দিন।");
+        // এখানে ${sessions[senderId].name} দিয়ে ইউজারের নাম ব্যবহার করা হয়েছে
+        sendFB(senderId, "ধন্যবাদ ${text}। আপনার ফোন নম্বর দিন।");
     } 
     else if (sessions[senderId].step === 2) {
         sessions[senderId].phone = text;
