@@ -2,9 +2,13 @@ const express = require('express');
 const axios = require('axios');
 const app = express().use(require('body-parser').json());
 
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-const SHEET_URL =  process.env.SHEET_URL; 
+// const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+// const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+// const SHEET_URL =  process.env.SHEET_URL; 
+
+const PAGE_ACCESS_TOKEN ="EAAXxvXfFpKEBQz9WkVZCSf0OZBs1vkfOLBO8Qj8zGXwUNiIvQXtDHE0bZCKZAtxMGkzgBZBUkwGpZAt2ZB1dBqjaZC8jmfZC10gsc9pnZAg1p6zIhIZBfOO4zjgp1qL5LjUacSaWaYpP3d5DlWZAYZCNz9bse4iuuAx1TZBOk2uToOSJNgZAbd3jQjDy1QEZAeHngZAEBg3DwZCD47H2vrdQZDZD";
+const VERIFY_TOKEN = "my_secret_token_123";
+const SHEET_URL =  "https://script.google.com/macros/s/AKfycbweWSMJ1CWAkR9WpZaP33Kgce-zN-01lfQwHvOZfX6Do9k-7emw3K8h6F-aJpi8mlRd/exec"; 
 
 // ইউজার সেশন স্টোর করার জন্য
 let sessions = {};
