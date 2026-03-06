@@ -4,7 +4,7 @@ const app = express().use(require('body-parser').json());
 
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbweWSMJ1CWAkR9WpZaP33Kgce-zN-01lfQwHvOZfX6Do9k-7emw3K8h6F-aJpi8mlRd/exec'; 
+const SHEET_URL =  process.env.SHEET_URL; 
 
 // ইউজার সেশন স্টোর করার জন্য
 let sessions = {};
