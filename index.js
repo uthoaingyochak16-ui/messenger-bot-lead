@@ -2,24 +2,33 @@ const express = require('express');
 const axios = require('axios');
 const app = express().use(require('body-parser').json());
 
-const PAGE_ACCESS_TOKEN = "EAAXxvXfFpKEBQ0Qjs7nBD5UGPjPSnL1ImAR6H6ZAuySL1eRiZBEiu50pZCM6bUNmZBSr3rgxMAZCkyusUjorqWDM71uSIS8kaIv05yZChWhmYkAi8RWZBnfbXfZAQRGU2ZAsAXcA92cggO35DKCecQngqwVDyubsIrrj2ZBAUQI37s8bCVo00oq85dAxjtTTvw8nf8uHmlgI3fIwZDZD";
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbweWSMJ1CWAkR9WpZaP33Kgce-zN-01lfQwHvOZfX6Do9k-7emw3K8h6F-aJpi8mlRd/exec";
 
 let sessions = {}; 
 
 app.post('/webhook', async (req, res) => {
-    const entry = req.body.entry[0].messaging[0];
-    const senderId = entry.sender.id; // এটিই আপনার SI, যা অটোমেটিক জেনারেট হয়
-    const text = entry.message.text;
+    const event = req.body.entry[0].messaging[0];
+    const senderId = event.sender.id;
+    const text = event.message.text.trim();
 
+    // ১. চেক করা: ইউজার কি একবারে কমা দিয়ে সব তথ্য পাঠিয়েছে? (আপনার দেওয়া পাইথন লজিক)
+    const parts = text.split(',');
+    if (parts.length === 3) {
+        const data = { si: senderId, name: parts[0].trim(), phone: parts[1].trim(), problem: parts[2].trim() };
+        await saveToSheet(senderId, data);
+        delete sessions[senderId]; // সেশন থাকলে মুছে ফেলা
+        return res.status(200).send('EVENT_RECEIVED');
+    }
+
+    // ২. যদি একবারে না পাঠায়, তবে ধাপে ধাপে প্রশ্ন করা
     if (!sessions[senderId]) {
         sessions[senderId] = { step: 1, name: "", phone: "", problem: "" };
-        sendFB(senderId, "হ্যালো! আপনার নাম কি?");
+        sendFB(senderId, "হ্যালো! আপনি চাইলে 'নাম, নম্বর, সমস্যা' এভাবে কমা দিয়ে একবারে লিখতে পারেন। অথবা আমি ধাপে ধাপে জিজ্ঞাসা করছি, আপনার নাম কি?");
     } 
     else if (sessions[senderId].step === 1) {
         sessions[senderId].name = text;
         sessions[senderId].step = 2;
-        // এখানে ${sessions[senderId].name} দিয়ে ইউজারের নাম ব্যবহার করা হয়েছে
         sendFB(senderId, `ধন্যবাদ ${text}। এবার আপনার ফোন নম্বরটি দিন।`);
     } 
     else if (sessions[senderId].step === 2) {
@@ -29,24 +38,17 @@ app.post('/webhook', async (req, res) => {
     } 
     else if (sessions[senderId].step === 3) {
         sessions[senderId].problem = text;
-        
-        // সামারি তৈরি করা
-        let summary = `আপনার দেওয়া তথ্যগুলো:\nনাম: ${sessions[senderId].name}\nফোন: ${sessions[senderId].phone}\nসমস্যা: ${sessions[senderId].problem}`;
-        sendFB(senderId, summary + "\n\nতথ্যগুলো শিটে জমা করা হচ্ছে...");
-
-        // অটোমেটিক SI এবং ডাটা পাঠানো
-        await axios.post(SHEET_WEB_APP_URL, {
-            si: senderId, // অটোমেটিক জেনারেটেড আইডি
-            name: sessions[senderId].name,
-            phone: sessions[senderId].phone,
-            problem: sessions[senderId].problem
-        });
-
-        sendFB(senderId, "সফলভাবে সেভ করা হয়েছে!");
-        delete sessions[senderId]; // সেশন ক্লিয়ার
+        await saveToSheet(senderId, sessions[senderId]);
+        delete sessions[senderId];
     }
     res.status(200).send('EVENT_RECEIVED');
 });
+
+// কমন ফাংশন: শিটে সেভ করার জন্য
+async function saveToSheet(senderId, data) {
+    await axios.post(SHEET_WEB_APP_URL, data);
+    sendFB(senderId, `সফলভাবে সেভ করা হয়েছে!\nনাম: ${data.name}\nফোন: ${data.phone}\nসমস্যা: ${data.problem}`);
+}
 
 async function sendFB(id, text) {
     await axios.post(`https://graph.facebook.com/v15.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
