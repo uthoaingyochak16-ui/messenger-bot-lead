@@ -1,58 +1,198 @@
-const express = require('express');
-const axios = require('axios');
-const app = express().use(require('body-parser').json());
+const express = require("express");
+const axios = require("axios");
+
+const app = express();
+
+app.use(express.json());
 
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
-const SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbweWSMJ1CWAkR9WpZaP33Kgce-zN-01lfQwHvOZfX6Do9k-7emw3K8h6F-aJpi8mlRd/exec";
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const SCRIPT_URL = process.env.SCRIPT_URL;
+const PORT = process.env.PORT || 3000;
 
-let sessions = {}; 
 
-app.post('/webhook', async (req, res) => {
-    const event = req.body.entry[0].messaging[0];
-    const senderId = event.sender.id;
-    const text = event.message.text.trim();
 
-    // ১. চেক করা: ইউজার কি একবারে কমা দিয়ে সব তথ্য পাঠিয়েছে? (আপনার দেওয়া পাইথন লজিক)
-    const parts = text.split(',');
-    if (parts.length === 3) {
-        const data = { si: senderId, name: parts[0].trim(), phone: parts[1].trim(), problem: parts[2].trim() };
-        await saveToSheet(senderId, data);
-        delete sessions[senderId]; // সেশন থাকলে মুছে ফেলা
-        return res.status(200).send('EVENT_RECEIVED');
-    }
+// =============================
+// VERIFY WEBHOOK
+// =============================
 
-    // ২. যদি একবারে না পাঠায়, তবে ধাপে ধাপে প্রশ্ন করা
-    if (!sessions[senderId]) {
-        sessions[senderId] = { step: 1, name: "", phone: "", problem: "" };
-        sendFB(senderId, "হ্যালো! আপনি চাইলে 'নাম, নম্বর, সমস্যা' এভাবে কমা দিয়ে একবারে লিখতে পারেন। অথবা আমি ধাপে ধাপে জিজ্ঞাসা করছি, আপনার নাম কি?");
-    } 
-    else if (sessions[senderId].step === 1) {
-        sessions[senderId].name = text;
-        sessions[senderId].step = 2;
-        sendFB(senderId, `ধন্যবাদ ${text}। এবার আপনার ফোন নম্বরটি দিন।`);
-    } 
-    else if (sessions[senderId].step === 2) {
-        sessions[senderId].phone = text;
-        sessions[senderId].step = 3;
-        sendFB(senderId, "আপনার সমস্যাটি বিস্তারিত লিখুন।");
-    } 
-    else if (sessions[senderId].step === 3) {
-        sessions[senderId].problem = text;
-        await saveToSheet(senderId, sessions[senderId]);
-        delete sessions[senderId];
-    }
-    res.status(200).send('EVENT_RECEIVED');
+app.get("/webhook", (req, res) => {
+
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode && token === VERIFY_TOKEN) {
+
+    return res.status(200).send(challenge);
+
+  }
+
+  res.sendStatus(403);
+
 });
 
-// কমন ফাংশন: শিটে সেভ করার জন্য
-async function saveToSheet(senderId, data) {
-    await axios.post(SHEET_WEB_APP_URL, data);
-    sendFB(senderId, `সফলভাবে সেভ করা হয়েছে!\nনাম: ${data.name}\nফোন: ${data.phone}\nসমস্যা: ${data.problem}`);
+
+
+// =============================
+// MAIN WEBHOOK
+// =============================
+
+app.post("/webhook", async (req, res) => {
+
+  const body = req.body;
+
+  if (body.object === "page") {
+
+    for (const entry of body.entry) {
+
+      const event = entry.messaging[0];
+
+      const sender = event.sender.id;
+
+      const msg = event.message?.text;
+
+      if (!msg) continue;
+
+
+      // ---------- HI / HELLO ----------
+
+      if (
+        msg.toLowerCase() === "hi" ||
+        msg.toLowerCase() === "hello"
+      ) {
+
+        await sendButtons(sender);
+
+        return res.sendStatus(200);
+
+      }
+
+
+      // ---------- OPTION 2 ----------
+
+      if (msg === "2") {
+
+        await sendText(
+          sender,
+          "আমাদের সম্পর্কে জানতে এখানে যান:\nhttps://quantummethod.org.bd/bn"
+        );
+
+        return res.sendStatus(200);
+
+      }
+
+
+      // ---------- OPTION 1 OR DATA ----------
+
+      try {
+
+        const r = await axios.post(SCRIPT_URL, {
+          text: msg
+        });
+
+        const data = r.data;
+
+        if (data.status === "exist") {
+
+          await sendText(
+            sender,
+            `Hello ${data.name}
+এই নাম্বারে আগে entry আছে
+Problem: ${data.problem}`
+          );
+
+        }
+
+        if (data.status === "saved") {
+
+          await sendText(
+            sender,
+            `Thanks ${data.name}
+Phone: ${data.phone}
+Problem: ${data.problem}
+Save হয়েছে`
+          );
+
+        }
+
+      } catch (e) {
+
+        await sendText(sender, "Error");
+
+      }
+
+    }
+
+  }
+
+  res.sendStatus(200);
+
+});
+
+
+
+// =============================
+// SEND TEXT
+// =============================
+
+async function sendText(id, text) {
+
+  await axios.post(
+    `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+    {
+      recipient: { id },
+      message: { text }
+    }
+  );
+
 }
 
-async function sendFB(id, text) {
-    await axios.post(`https://graph.facebook.com/v15.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
-        recipient: { id: id }, message: { text: text }
-    });
+
+
+// =============================
+// SEND BUTTONS
+// =============================
+
+async function sendButtons(id) {
+
+  await axios.post(
+    `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+    {
+      recipient: { id },
+
+      message: {
+        attachment: {
+          type: "template",
+          payload: {
+            template_type: "button",
+            text:
+              "আমি আপনাকে কিভাবে সাহায্য করতে পারি?",
+
+            buttons: [
+              {
+                type: "postback",
+                title: "প্রতিনিধির সাথে যোগাযোগ",
+                payload: "1"
+              },
+
+              {
+                type: "postback",
+                title: "আমাদের সম্পর্কে",
+                payload: "2"
+              }
+            ]
+          }
+        }
+      }
+
+    }
+  );
+
 }
-app.listen(process.env.PORT || 3000);
+
+
+
+app.listen(PORT, () => {
+  console.log("Server running");
+});
