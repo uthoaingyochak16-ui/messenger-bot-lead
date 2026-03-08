@@ -118,7 +118,7 @@ Save হয়েছে`
 
       } catch (e) {
 
-        await sendText(sender, "Error");
+        await sendText(sender, "Error,Try again.");
 
       }
 
